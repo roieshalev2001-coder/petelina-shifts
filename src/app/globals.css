@@ -1,0 +1,711 @@
+@import "tailwindcss";
+
+/*
+ * שפת פטלינה. הפלטה חולצה מ-petelina.co.il.
+ *
+ * חוזה האדום: אדום לעולם אינו דקורטיבי. הוא מסמן פעולה ראשית, בחירה פעילה,
+ * הרס, או את זהות בית הקפה בכותרת העליונה — ותו לא. כל אזהרה היא ענבר.
+ * החום של המותג מגיע מהקרם, מהטיפוגרפיה ומהמרווחים.
+ */
+:root {
+  --brand: #ca262e;
+  --brand-deep: #a81e25;
+  --paper: #ede9e1;
+  --surface: #ffffff;
+  --ink: #1a1614;
+  --muted: #665d57;
+  --border: #ded8cd;
+
+  /* התפקיד מסומן בנקודה קטנה, לא בצביעת שורה. גוונים מרומזים מהגיליון
+     המקורי כדי שהזיהוי יישאר מיידי, בלי הרוויה של האקסל. */
+  --role-manager: #9a5b2d;
+  --role-bartender: #4e7a55;
+  --role-waiter: #8b5273;
+
+  /*
+   * עקומות התנועה.
+   *
+   * ברירות המחדל של CSS חלשות — `ease-out` המובנה כמעט אינו מורגש,
+   * והתוצאה נראית אקראית ולא מכוונת. הערכים כאן חדים יותר.
+   *
+   * `ease-in` אינו מוגדר כאן בכוונה: הוא מתחיל לאט, כלומר משהה בדיוק
+   * ברגע שהמשתמש מסתכל, וגורם לממשק להרגיש כבד.
+   */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  /* עקומת המגירה של iOS — לגיליון שעולה מלמטה */
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+
+  /*
+   * הפס — זהות האתר.
+   *
+   * שחור חם ולא שחור: הוא ה-`--ink` של הטקסט, כך שהפס והכותרות הם אותו
+   * צבע ולא שני שחורים שמתווכחים. הטקסט עליו קרם, לא לבן — לבן על שחור
+   * חם נראה כחלחל ומנותק מהקרם של הדף.
+   *
+   * נמדד: קרם על הפס 15.96:1, המעומעם 8.17:1. אדום המותג על הפס יוצא
+   * 3.28:1 — לא מספיק לטקסט רגיל, ולכן השם בפס קרם והאדום מגיע מהפטל.
+   */
+  --band: #1a1614;
+  --on-band: #f6f1e7;
+  --on-band-muted: #b9ada0;
+}
+
+@theme inline {
+  --color-paper: var(--paper);
+  --color-surface: var(--surface);
+  --color-ink: var(--ink);
+  --color-muted: var(--muted);
+  --color-line: var(--border);
+  --color-brand: var(--brand);
+  --color-brand-deep: var(--brand-deep);
+  --color-role-manager: var(--role-manager);
+  --color-role-bartender: var(--role-bartender);
+  --color-role-waiter: var(--role-waiter);
+  --color-band: var(--band);
+  --color-on-band: var(--on-band);
+  --color-on-band-muted: var(--on-band-muted);
+  --font-sans: var(--font-assistant);
+}
+
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: var(--font-assistant), "Segoe UI", system-ui, sans-serif;
+}
+
+/* מספרים ושעות נשארים LTR גם בתוך טקסט עברי */
+.num {
+  direction: ltr;
+  unicode-bidi: isolate;
+  font-variant-numeric: tabular-nums;
+}
+
+/* טבעת מיקוד אחידה — נראית על כל אחד מהמשטחים */
+:where(a, button, input, select, textarea, summary):focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+
+
+/*
+ * טבלת הסידור — שפת הגיליון.
+ *
+ * זה המסך היחיד שחוזר למראה האקסל, ובכוונה: הצוות קורא את הסידור הזה
+ * שנים, והצבע הוא איך שהם מוצאים את השורה שלהם. שאר האפליקציה נשארת
+ * בשפת פטלינה, ולכן הכול כאן תחום ל-`.schedule-table`.
+ *
+ * הגוונים נדגמו מהגיליון המקורי של בית הקפה. אין למה "לחזור" בגיט —
+ * הקומיט הראשון של האפליקציה כבר מכיל את העיצוב החדש, והגיליון הוא
+ * המקור היחיד שנשאר.
+ *
+ * שים לב: הצבע כאן הוא **זהות של תפקיד**, לא אזהרה ולא פעולה.
+ *
+ * חוזה האדום נשמר כמעט במלואו, ויש לו חריג יחיד ומתועד: `cell-over-max`,
+ * חריגה ממקסימום המשמרות. היא נבחרה במפורש ע"י המנהל, היא הסימון היחיד
+ * בלוח שחוסם פרסום עד אישור, והענבר כבר תפוס לארבע אזהרות אחרות. הגוון
+ * רווי ולא ורוד-עמום, כי שורות המלצרים ממילא ורודות (#e9d3de) וגוון עדין
+ * היה נבלע בהן בדיוק במקום שבו הוא הכי נחוץ.
+ */
+.schedule-table {
+  --sheet-head: #d9d9d9;
+  --sheet-manager: #f4b183;
+  --sheet-bartender: #dbe8d4;
+  --sheet-waiter: #e9d3de;
+  --sheet-attention: #ffff00;
+  /*
+   * נמדד מול שלושת צבעי התפקיד. גוון בהיר יותר (#ffc7ce, אדום ה"שגוי" של
+   * גיליונות) יצא 1.04:1 מול שורת המלצרים — כמעט אותה בהירות, כלומר תא
+   * שלא רואים במבט, בדיוק במקום שבו המנהל אמור לראות. כאן: 1.51 לפחות
+   * מול כל שורה, 1.95 מול המלצרים. הטקסט בתא בצבע הדיו ולא באדום כהה,
+   * כי אדום על אדום ירד מתחת ל-4.5:1.
+   */
+  --sheet-over-max: #f87171;
+  --sheet-line: #b7b7b7;
+
+  /* הגיליון מרובע: בלי פינות מעוגלות ובלי צל */
+  border-radius: 0;
+  border-color: var(--sheet-line);
+  box-shadow: none;
+  /* Arial לטבלה בלבד — הספרות והשמות נקראים בדיוק כמו בגיליון */
+  font-family: Arial, "Helvetica Neue", Helvetica, sans-serif;
+}
+
+.schedule-table table {
+  border-collapse: collapse;
+}
+
+.schedule-table th,
+.schedule-table td {
+  border: 1px solid var(--sheet-line);
+  text-align: center;
+}
+
+.schedule-table thead th {
+  background: var(--sheet-head);
+  color: #000;
+  font-weight: 700;
+}
+
+/* שורות התפקיד. הרקע יושב על התא ולא על השורה, כדי שגבולות התאים
+   יישארו חדים מעליו כמו בגיליון. */
+.schedule-table tr[data-role="manager"] > * {
+  background: var(--sheet-manager);
+}
+.schedule-table tr[data-role="bartender"] > * {
+  background: var(--sheet-bartender);
+}
+.schedule-table tr[data-role="waiter"] > * {
+  background: var(--sheet-waiter);
+}
+
+/*
+ * תא שהתפקיד שלו שונה מזה של השורה — בשישי המלצר השביעי יושב בשורת
+ * אחראי הערב (ראה buildGrid), ובלי זה היה נצבע כתום. אותה ספציפיות כמו
+ * כללי השורה ומיד אחריהם, כך שהתא גובר על השורה — וכללי הצהוב והאדום
+ * שלמטה עדיין גוברים על שניהם.
+ */
+.schedule-table td[data-role="manager"] {
+  background: var(--sheet-manager);
+}
+.schedule-table td[data-role="bartender"] {
+  background: var(--sheet-bartender);
+}
+.schedule-table td[data-role="waiter"] {
+  background: var(--sheet-waiter);
+}
+
+/*
+ * צהוב = דורש תשומת לב, בדיוק כמו התא הצהוב בגיליון.
+ *
+ * `td.cell-flag` ולא `.cell-flag`: אותו שם מחלקה יושב גם על הנקודה
+ * הקטנה שבתוך התא, וכלל רחב היה צובע גם אותה בצהוב על צהוב.
+ */
+.schedule-table td.cell-flag {
+  background: var(--sheet-attention);
+}
+
+/*
+ * חריגה ממקסימום המשמרות — הסימון היחיד בלוח שאינו ענבר.
+ *
+ * מוסבר במלואו ב-badgeTones ב-src/components/ui.tsx: ענבר כבר נושא ארבע
+ * אזהרות, וזו היחידה שדורשת אישור אקטיבי. הטקסט בתא אומר "מעל המקסימום"
+ * במפורש, ולכן הצבע אינו נושא את המידע לבדו.
+ */
+.schedule-table td.cell-over-max {
+  background: var(--sheet-over-max);
+}
+
+/* עמודת התוויות מימין. הרקע מגיע מצבע התפקיד של השורה, כמו בגיליון —
+   כאן נקבעים רק היישור והמשקל. */
+.schedule-table tbody th {
+  font-weight: 400;
+  text-align: right;
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * שכבת הטלפון
+ * ---------------------------------------------------------------------------
+ *
+ * האתר מותקן במסך הבית של רוב העובדים, ולכן "טלפון" הוא מצב ברירת המחדל
+ * ולא מקרה קצה. שני דברים שאין להם פתרון ב-Tailwind לבדו:
+ */
+
+/*
+ * פס הבית של האייפון.
+ *
+ * דורש `viewportFit: "cover"` בשורש (ראה src/app/layout.tsx) — בלעדיו
+ * `env()` מחזיר אפס וכל מה שדביק בתחתית יושב מתחת לפס.
+ */
+.pb-safe {
+  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+}
+
+/*
+ * הקצה העליון.
+ *
+ * `viewportFit: "cover"` נוסף בשביל הסרגל התחתון, אבל הוא פותח את **כל**
+ * הקצוות — כולל זה שמתחת לשעון ולסוללה. כותרת שנגללת משאירה את התוכן
+ * עולה לשם, וכך "עובדים" הופיע על גבי שורת המצב בצילום מהטלפון.
+ */
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+
+/*
+ * גובה הכותרת הדביקה, במקום אחד.
+ *
+ * כל מה שנדבק *מתחתיה* צריך לדעת כמה לרדת, והגובה אינו קבוע: הוא גדל
+ * ב-`safe-area-inset-top` באייפון עם מגרעת. `top-14` קשיח נשבר בדיוק
+ * שם, ולכן המספר חי כאן ולא מפוזר ברכיבים.
+ */
+:root {
+  --header-h: calc(3.25rem + env(safe-area-inset-top));
+}
+
+.top-header {
+  top: var(--header-h);
+}
+
+/*
+ * גלילה אופקית של הדף היא הכשל הנפוץ ביותר בטלפון, והיא כמעט תמיד
+ * מגיעה מרכיב יחיד שחורג. נחסמת בשורש ולא ברכיבים — טבלאות שצריכות
+ * לגלול עושות זאת בתוך `overflow-x-auto` משלהן.
+ */
+html,
+body {
+  overflow-x: clip;
+}
+
+/*
+ * הדגשת מגע כחולה של סאפארי על כל לחיצה. מכבים אותה ומחליפים בהתנהגות
+ * שהרכיבים כבר מגדירים (`active:`), אחרת כל כפתור מהבהב בכחול מערכת.
+ */
+@media (hover: none) {
+  * {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/*
+ * ה-hover התקוע.
+ *
+ * במסך מגע אין ריחוף — הדפדפן מפעיל `:hover` בלחיצה ו**משאיר אותו**
+ * עד שנוגעים במקום אחר. התוצאה: כפתור שלחצת עליו נשאר מודגש, וזה
+ * נראה כמו באג. באפליקציה שרוב השימוש בה בטלפון זה קורה כל הזמן.
+ *
+ * במקום לעטוף 32 מחלקות `hover:` אחת-אחת, מבטלים את האפקט בשורש
+ * למכשירים בלי ריחוף אמיתי. משוב הלחיצה מגיע מ-`active:`, שהוא ממילא
+ * הנכון למגע.
+ */
+@media (hover: none) {
+  .hover\:bg-paper:hover,
+  .hover\:bg-paper\/70:hover,
+  .hover\:bg-surface:hover,
+  .hover\:bg-brand-deep:hover,
+  .hover\:text-ink:hover,
+  .hover\:border-stone-300:hover {
+    background-color: revert-layer;
+    color: revert-layer;
+    border-color: revert-layer;
+  }
+}
+
+/*
+ * תנועה מצומצמת.
+ *
+ * "מצומצם" ולא "כבוי": אטימות וצבע נשארים כי הם מסבירים מה קרה. מה
+ * שיורד הוא תזוזה והגדלה, שהם מה שגורם לבחילת תנועה.
+ */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/*
+ * ---------------------------------------------------------------------------
+ * השפה הנועזת — טיפוגרפיה, מגע ותנועה
+ * ---------------------------------------------------------------------------
+ */
+
+/*
+ * טיפוגרפיה בסקאלה עריכתית.
+ *
+ * ריווח האותיות תלוי בגודל ולא קבוע: טקסט גדול נראה מפורק כשהאותיות
+ * רחוקות, ולכן הוא מתהדק (-0.025em), והגוף נשאר על אפס. הגובה בין שורות
+ * הפוך לגודל — צפוף בכותרת ענקית, נדיב בגוף.
+ */
+.display {
+  font-size: clamp(2.25rem, 9vw, 3.5rem);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.025em;
+}
+
+/* כותרת מקטע: קטנה, מודגשת, וקו שחור מתחתיה — כמו בתפריט, לא כמו בתבנית */
+.section-title {
+  border-bottom: 2px solid var(--ink);
+  padding-bottom: 0.5rem;
+  font-size: 0.9375rem;
+  font-weight: 800;
+  letter-spacing: -0.005em;
+}
+
+/*
+ * פקדים מרגישים כמו אפליקציה.
+ *
+ * `touch-action: manipulation` — הדפדפן לא מחכה 300ms לבדוק אם תגיע
+ * לחיצה כפולה לזום, והלחיצה נקלטת מיד.
+ * `user-select: none` — לחיצה ארוכה על כפתור לא מסמנת את הכיתוב שלו.
+ * רק על פקדים: טקסט של תוכן — שם, שעה, מספר טלפון — חייב להישאר ניתן
+ * להעתקה.
+ */
+:where(button, a, summary, [role="button"], label) {
+  touch-action: manipulation;
+}
+:where(button, summary, [role="button"], nav a) {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/*
+ * תיבת סימון בשפת האתר.
+ *
+ * תיבת הדפדפן כחולה ומעוגלת — שני דברים שאסורים כאן. מרובעת, מסגרת
+ * בצבע הדיו, ומסומנת היא בלוק דיו עם וי קרם. הווי מצויר ב-SVG כרקע,
+ * כך שהתיבה נשארת `<input>` אמיתי עם כל הנגישות שלו.
+ */
+.check {
+  appearance: none;
+  -webkit-appearance: none;
+  display: inline-grid;
+  place-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+  border: 2px solid var(--ink);
+  background: var(--surface);
+  cursor: pointer;
+  transition: background-color 120ms var(--ease-out);
+}
+.check:checked {
+  background: var(--ink)
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16' fill='none' stroke='%23f6f1e7' stroke-width='2.4' stroke-linecap='square'%3E%3Cpath d='M3 8.5l3.2 3.2L13 4.8'/%3E%3C/svg%3E")
+    center / 0.85rem no-repeat;
+}
+.check:focus-visible {
+  outline: 2px solid var(--brand);
+  outline-offset: 2px;
+}
+.check:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/*
+ * כניסה עדינה לתוכן — רק במסכי העובד ובכניסה.
+ *
+ * מסכים שפותחים כמה פעמים בשבוע, ולכן מותר להם רגע של נוכחות. במסכי
+ * הניהול אין את זה בכוונה: שם רואי נכנס ויוצא עשרות פעמים, וכל תנועה
+ * רק מאטה. ארבעת הבלוקים הראשונים מדורגים ב-40ms; מה שמתחת לקפל לא
+ * מחכה לשום דבר.
+ *
+ * `backwards` ולא `both`: עם `both` הבלוק נשאר אחרי הכניסה עם
+ * `transform: translateY(0)` — שקוף לעין, אבל הוא הופך את הבלוק לבסיס של
+ * כל `position: fixed` שבתוכו. חלון קופץ שנפתח מתוך כרטיס בבית העובד
+ * (מסירת משמרת, הוספה ליומן) נכלא בתוך הכרטיס במקום לכסות את המסך.
+ * `backwards` שומר את המצב ההתחלתי בזמן ההשהיה, ובסוף לא משאיר כלום.
+ */
+.rise > * {
+  animation: rise 220ms var(--ease-out) backwards;
+}
+.rise > :nth-child(2) {
+  animation-delay: 40ms;
+}
+.rise > :nth-child(3) {
+  animation-delay: 80ms;
+}
+.rise > :nth-child(n + 4) {
+  animation-delay: 120ms;
+}
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+}
+
+/*
+ * הכותרת הגדולה שמתכווצת בגלילה — דפוס הכותרות של אייפון.
+ *
+ * הגיבור שבבית העובד נגלל עם התוכן ונמוג, והשם הקטן בפס הדביק מופיע
+ * במקומו. כל זה צמוד לגלילה עצמה (`animation-timeline: scroll()`) ורץ
+ * מחוץ לשרשור הראשי: אין כאן אנימציה שמתנגנת, רק תגובה לאצבע.
+ *
+ * דפדפן בלי תמיכה מקבל את המצב הסטטי — הגיבור נגלל כרגיל והשם בפס
+ * פשוט מוצג. כלום לא נשבר, רק התנועה חסרה.
+ */
+@supports (animation-timeline: scroll()) {
+  .hero-fade {
+    animation: hero-fade linear both;
+    animation-timeline: scroll(root);
+    animation-range: 0 180px;
+  }
+  @keyframes hero-fade {
+    to {
+      opacity: 0;
+      transform: translateY(-20px) scale(0.98);
+    }
+  }
+
+  /* השם בפס מופיע רק כשיש גיבור בעמוד; בשאר המסכים הוא פשוט שם */
+  html:has(.hero-fade) .band-name {
+    animation: band-name-in linear both;
+    animation-timeline: scroll(root);
+    animation-range: 90px 170px;
+  }
+  @keyframes band-name-in {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+}
+
+/*
+ * הפס שבסרגל התחתון גולש ללשונית החדשה.
+ *
+ * ה-layout אינו נטען מחדש בניווט, ולכן הרכיב חי ורק המיקום משתנה —
+ * מעבר על `transform` מספיק. `--ease-in-out` כי זו תזוזה על המסך ולא
+ * כניסה. RTL: הלשונית הראשונה מימין, ולכן ההזזה שלילית.
+ */
+.tab-indicator {
+  transition:
+    transform 250ms var(--ease-in-out),
+    opacity 150ms var(--ease-out);
+}
+
+/*
+ * מסילת הימים בהגשה.
+ *
+ * גלילה אופקית של הדפדפן עם עצירה בכל יום — פיזיקת המגע של המכשיר עצמו:
+ * צמוד לאצבע, תנופה, ואפשר לתפוס באמצע. `scroll-snap-stop: always`
+ * מונע מהחלקה חזקה לדלג על שלושה ימים בבת אחת.
+ * `overscroll-behavior-x: contain` — החלקה בקצה לא גוררת את הדף או
+ * מפעילה "חזרה" של הדפדפן.
+ * הגובה נקבע מהקוד לפי היום המוצג, ומשתנה ב-200ms.
+ */
+.day-track {
+  display: flex;
+  align-items: flex-start;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+  transition: height 200ms var(--ease-out);
+}
+.day-track::-webkit-scrollbar {
+  display: none;
+}
+.day-panel {
+  flex: 0 0 100%;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+}
+
+/*
+ * סימן המשמרת — ריבוע ריק, ✓ או ★.
+ *
+ * שני הציורים תמיד שם; המצב רק מחליף ביניהם, במעברים (לא באנימציות):
+ * הווי "נמתח" לתוכו לאורך הקו (`stroke-dashoffset`, 160ms) והכוכב צץ
+ * מ-0.85. מעבר שנקטע באמצע — לחיצה מהירה כפולה — ממשיך מהמקום שבו הוא.
+ */
+.mark {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  border: 2px solid rgb(26 22 20 / 0.28);
+  background: var(--surface);
+  transition:
+    background-color 120ms var(--ease-out),
+    border-color 120ms var(--ease-out);
+}
+.mark[data-state="available"],
+.mark[data-state="preferred"] {
+  border-color: var(--brand);
+  background: var(--brand);
+}
+.mark svg {
+  grid-area: 1 / 1;
+  width: 70%;
+  height: 70%;
+}
+.mark-check path {
+  fill: none;
+  stroke: #fff;
+  stroke-width: 2.4;
+  stroke-linecap: square;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  transition: stroke-dashoffset 160ms var(--ease-out);
+}
+.mark[data-state="available"] .mark-check path {
+  stroke-dashoffset: 0;
+}
+.mark-star {
+  fill: #fff;
+  opacity: 0;
+  transform: scale(0.85);
+  transition:
+    opacity 120ms var(--ease-out),
+    transform 160ms var(--ease-out);
+}
+.mark[data-state="preferred"] .mark-star {
+  opacity: 1;
+  transform: scale(1);
+}
+
+/* המונה "סימנת 3" — המספר החדש עולה מלמטה במקום להתחלף במקום */
+.count-roll {
+  display: inline-block;
+  animation: count-roll 180ms var(--ease-out);
+}
+@keyframes count-roll {
+  from {
+    opacity: 0;
+    transform: translateY(45%);
+  }
+}
+
+/*
+ * החלפת הכיתוב בכפתור השליחה ("שליחת ההגשה" ← "נשלח ✓").
+ * טשטוש של 2px מחבר את שני המצבים לתנועה אחת, במקום שתי מילים שנראות
+ * רגע זו על זו.
+ */
+.label-swap {
+  display: inline-block;
+  animation: label-swap 200ms var(--ease-out);
+}
+@keyframes label-swap {
+  from {
+    opacity: 0;
+    filter: blur(2px);
+  }
+}
+
+/*
+ * חלון קופץ (src/components/Dialog.tsx).
+ *
+ * בטלפון — גיליון שעולה מלמטה בעקומת המגירה של iOS, 260ms. במסך רחב —
+ * חלון שמופיע מ-0.97 ולא מאפס (שום דבר לא מופיע יש מאין), 200ms. הרקע
+ * מתכהה במקביל. היציאה מהירה יותר — 150ms — כי ההחלטה כבר התקבלה.
+ */
+.dialog-overlay {
+  animation: overlay-in 200ms var(--ease-out);
+}
+.dialog-panel {
+  animation: sheet-in 260ms var(--ease-drawer);
+}
+@media (min-width: 640px) {
+  .dialog-panel {
+    animation: pop-in 200ms var(--ease-out);
+  }
+}
+.dialog-overlay.is-closing {
+  animation: overlay-out 150ms var(--ease-out) forwards;
+}
+.dialog-overlay.is-closing .dialog-panel {
+  animation: sheet-out 150ms var(--ease-out) forwards;
+}
+@media (min-width: 640px) {
+  .dialog-overlay.is-closing .dialog-panel {
+    animation: pop-out 150ms var(--ease-out) forwards;
+  }
+}
+@keyframes overlay-in {
+  from {
+    background-color: transparent;
+  }
+}
+@keyframes overlay-out {
+  to {
+    background-color: transparent;
+  }
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(100%);
+  }
+}
+@keyframes sheet-out {
+  to {
+    transform: translateY(100%);
+  }
+}
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+@keyframes pop-out {
+  to {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+}
+
+/*
+ * מסך עם סרגל פעולה משלו (טופס ההגשה) — הסרגל התחתון מתחבא.
+ *
+ * לפי נוכחות הסרגל בעמוד ולא לפי הכתובת: הגשה אחרי המועד היא אותה
+ * כתובת בלי טופס, ושם הסרגל חייב להישאר — אחרת זה מבוי סתום.
+ */
+html:has(.submit-bar) .tab-bar,
+html:has(.submit-bar) .tab-bar-spacer,
+/* בחירת הצד השני בהחלפה — הפס של ScheduleEditor יושב במקום הלשוניות */
+html:has(.swap-bar) .tab-bar,
+html:has(.swap-bar) .tab-bar-spacer {
+  display: none;
+}
+
+/*
+ * תנועה מצומצמת לרכיבים החדשים, במפורש.
+ *
+ * הכלל הגלובלי למעלה מקצר משכים, אבל אנימציה שצמודה לגלילה לא נמדדת
+ * בזמן — ולכן היא מכובה כאן ידנית: הגיבור פשוט נגלל, השם בפס פשוט מוצג.
+ */
+@media (prefers-reduced-motion: reduce) {
+  .hero-fade,
+  html:has(.hero-fade) .band-name,
+  .rise > * {
+    animation: none !important;
+  }
+}
+
+/* מי שביקש פחות שקיפות מקבל פס אטום, בלי הטשטוש שמתחתיו */
+@media (prefers-reduced-transparency: reduce) {
+  .band-glass {
+    background: var(--band) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  /* הצללות והרקעים העדינים של המסך נעלמים בהדפסה; מה שנשאר לשאת את
+     ההבחנה בין השורות הוא הקווים, ולכן הם מתחזקים. */
+  .schedule-table {
+    border-color: #6b645e !important;
+    box-shadow: none !important;
+    /* מבקשים מהדפדפן להדפיס גם את הרקעים — הבנד, נקודות התפקיד וסימון
+       הקיצור. גם אם המשתמש כיבה "גרפיקת רקע", הקווים והטקסט לבדם
+       נושאים את כל המידע. */
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  .schedule-table th,
+  .schedule-table td {
+    border-color: #9a938c !important;
+  }
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+}

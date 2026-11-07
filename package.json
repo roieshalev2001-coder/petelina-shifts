@@ -1,0 +1,53 @@
+{
+  "name": "shifts",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "prisma generate && next build",
+    "start": "next start",
+    "lint": "eslint",
+    "db:seed": "tsx prisma/seed.ts",
+    "db:reset": "prisma migrate reset --force",
+    "db:studio": "prisma studio",
+    "test": "tsx --test \"src/**/*.test.ts\"",
+    "simulate": "tsx scripts/simulate-week.ts",
+    "swap:race": "tsx scripts/swap-race.ts",
+    "access": "tsx --env-file=.env scripts/access.ts",
+    "test:e2e": "tsx --env-file=.env scripts/e2e-login.ts",
+    "test:roundtrip": "tsx --env-file=.env scripts/week-roundtrip.ts",
+    "week:backup": "tsx --env-file=.env scripts/week-data.ts backup",
+    "week:restore": "tsx --env-file=.env scripts/week-data.ts restore",
+    "test:swap": "tsx --env-file=.env scripts/swap-approval.ts",
+    "test:friday": "tsx --env-file=.env scripts/friday-swap.ts"
+  },
+  "dependencies": {
+    "@prisma/adapter-better-sqlite3": "^7.9.1",
+    "@prisma/adapter-pg": "^7.9.1",
+    "@prisma/client": "^7.9.1",
+    "@vercel/analytics": "^2.0.1",
+    "@vercel/speed-insights": "^2.0.0",
+    "modern-screenshot": "^4.7.0",
+    "next": "16.3.1",
+    "pg": "^8.23.0",
+    "prisma": "^7.9.1",
+    "react": "19.2.8",
+    "react-dom": "19.2.8",
+    "tsx": "^4.23.12",
+    "web-push": "^3.6.7"
+  },
+  "devDependencies": {
+    "@prisma/compute-sdk": "^0.40.0",
+    "@tailwindcss/postcss": "^4",
+    "@types/node": "^20",
+    "@types/pg": "^8.21.0",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "@types/web-push": "^3.6.4",
+    "dotenv": "^17.4.2",
+    "eslint": "^9",
+    "eslint-config-next": "16.3.1",
+    "tailwindcss": "^4",
+    "typescript": "^5"
+  }
+}

@@ -1,0 +1,615 @@
+// סכימת מסד הנתונים לאפליקציית סידור המשמרות.
+// שדות מסוג "רשימה" נשמרים כמחרוזת CSV והערכים המותרים מתועדים בהערה
+// מעל כל שדה — מוסכמה שנשמרה מימי SQLite ועובדת כמו שהיא גם ב-Postgres.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+// כתובת החיבור מוגדרת ב-prisma.config.ts (Prisma 7), ובזמן ריצה דרך adapter ב-src/lib/db.ts
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// עובדים
+// ---------------------------------------------------------------------------
+
+model Employee {
+  id       String  @id @default(cuid())
+  fullName String
+  /// שם המשתמש בכניסה. נשמר מנורמל (`972…`) דרך src/lib/phone.ts, וייחודי
+  /// כדי ששני עובדים לא יוכלו לחלוק זהות — מצב שבו הכניסה אינה יכולה
+  /// להבחין ביניהם ושניהם ננעלים בחוץ. null מותר: עובד בלי טלפון פשוט
+  /// אינו יכול להיכנס, ו-Postgres אינו סופר NULL כהתנגשות.
+  phone    String? @unique
+  /// CSV מתוך: waiter | bartender | manager, ומתלמדים: traineeWaiter |
+  /// traineeBartender — ראה TRAINEE_ROLES ב-src/lib/domain.ts
+  roles    String
+  active   Boolean @default(true)
+  /// שריד מתקופת הקישורים האישיים /e/[token]. אינו בשימוש מאז המעבר
+  /// לחשבונות, ונשאר כדי לא למחוק עמודה בפריסה מסוכנת.
+  token    String  @unique
+  /// מתי נשלחו לעובד פרטי הכניסה לאחרונה. null = טרם נשלחו.
+  /// סימן למנהל איפה הוא עצר, לא ראיה שהעובד קיבל.
+  linkSentAt DateTime?
+  /// המפתח של מנוי היומן האישי (/api/calendar/<token>.ics) — יומן אפל
+  /// נרשם אליו ומתעדכן לבד. נוצר בפעם הראשונה שהעובד פותח "הוספה ליומן",
+  /// ומתחלף ב"קישור חדש" (הישן מפסיק לעבוד). null = עוד לא נוצר.
+  calendarToken String? @unique
+  /// קישור הכניסה האישי (/invite/<token>) — שהמנהל שולח בוואטסאפ, ובו העובד
+  /// בוחר קוד בעצמו. נשמר רק הגיבוב (sha256) של המפתח, כמו קוד הכניסה:
+  /// המפתח עצמו מוצג למנהל פעם אחת. עובד פעם אחת ותקף 7 ימים — ראה
+  /// src/lib/invite.ts. null = אין קישור פתוח.
+  inviteTokenHash String?   @unique
+  inviteExpiresAt DateTime?
+
+  // ---- כניסה למערכת ----
+  /// גיבוב scrypt של קוד הכניסה. null = טרם נקבע קוד, אי אפשר להיכנס.
+  /// **מושמט גלובלית** ב-src/lib/prisma-client.ts כדי שלא ידלוף למסכים.
+  passcodeHash       String?
+  /// כופה החלפת קוד בכניסה הבאה — נדלק כשהמנהל קובע או מאפס קוד
+  mustChangePasscode Boolean @default(true)
+  /// **הרשאת ניהול.** נפרד מ-roles בכוונה: שם "manager" הוא אחמ"ש,
+  /// תפקיד במשמרת המשמש להתאמת משבצות, ולא הרשאה לערוך את הסידור.
+  canManage          Boolean @default(false)
+  /// הגבלת קצב. יושב במסד ולא בזיכרון כי השרת נרדם ומתעורר — ראה
+  /// src/lib/lockout.ts
+  failedAttempts     Int       @default(0)
+  lastFailedAt       DateTime?
+  lockedUntil        DateTime?
+
+  /// נזרע true לעובדים שהופיעו בגיליון בשם פרטי בלבד ודורשים השלמת פרטים
+  needsReview Boolean @default(false)
+
+  // ---- שדות פרופיל הגלויים למנהל בלבד ----
+  /// כמה משמרות העובד חייב לקבל בשבוע
+  requiredShifts  Int     @default(0)
+  maxShifts       Int     @default(6)
+  /// שריד מהתקופה שבה סגירה הייתה הרשאה. בוטלה — כולם יכולים לסגור —
+  /// ואיש אינו קורא או כותב את העמודה. נשארת כדי לא למחוק נתונים בפריסה,
+  /// ואפשר להפיל אותה במיגרציה של שורה אחת.
+  canClose        Boolean @default(false)
+  /// 1 = חדש ... 5 = ותיק
+  seniority       Int     @default(3)
+  /// morning | evening | null
+  preferredPeriod String?
+  /// כמה שישיים בחודש העובד יכול: none | one | two | unlimited.
+  /// שישי הוא סבב חובה (ראה src/lib/fridays.ts), וזה הפטור היחיד ממנו.
+  fridayLimit     String  @default("unlimited")
+  privateNotes    String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  availabilities Availability[]
+  assignments    Assignment[]
+  submissions    Submission[]
+  constraintsAsA PairConstraint[] @relation("ConstraintA")
+  constraintsAsB PairConstraint[] @relation("ConstraintB")
+  fridayPlans    FridayPlan[]
+  offeredFridays FridaySwap[]     @relation("FridaySwapOfferedBy")
+  claimedFridays FridaySwap[]     @relation("FridaySwapClaimedBy")
+  offeredSwaps   SwapOffer[]      @relation("SwapOfferedBy")
+  claimedSwaps   SwapOffer[]      @relation("SwapClaimedBy")
+  decidedSwaps   SwapOffer[]      @relation("SwapDecidedBy")
+  notifications  Notification[]
+  pushSubs       PushSubscription[]
+  traineeShifts  TraineeAssignment[]
+  reminders      ReminderLog[]
+  usualWeek      AvailabilityTemplate?
+}
+
+/// זוג עובדים שאסור לשבץ יחד. הסיבה גלויה למנהל בלבד.
+model PairConstraint {
+  id  String   @id @default(cuid())
+  aId String
+  a   Employee @relation("ConstraintA", fields: [aId], references: [id], onDelete: Cascade)
+  bId String
+  b   Employee @relation("ConstraintB", fields: [bId], references: [id], onDelete: Cascade)
+
+  /// overlapping = רק אם השעות נחפפות | sameDay = אסור באותו יום בכלל
+  scope  String  @default("overlapping")
+  /// true = אילוץ קשיח שלא ניתן להפרה, false = העדפה שהאלגוריתם ינסה לכבד
+  hard   Boolean @default(true)
+  reason String?
+
+  createdAt DateTime @default(now())
+
+  @@unique([aId, bId])
+}
+
+// ---------------------------------------------------------------------------
+// תבנית שבועית
+// ---------------------------------------------------------------------------
+
+/// משבצת בתבנית הקבועה. עריכה כאן משפיעה רק על שבועות שייפתחו מכאן והלאה —
+/// שבוע שנפתח מחזיק העתק משלו (WeekSlot).
+model TemplateSlot {
+  id        String  @id @default(cuid())
+  /// 0 = ראשון ... 6 = שבת
+  dayOfWeek Int
+  /// waiter | bartender | manager
+  role      String
+  /// morning | evening | allday
+  period    String
+  /// "HH:MM"
+  startTime String
+  /// "HH:MM" או "CLOSING" (נפתר לפי closingTime של השבוע)
+  endTime   String
+  label     String?
+  sortOrder Int
+  active    Boolean @default(true)
+
+  /// המשבצת פותחת את הסבב — חובה להגיע בשעה המדויקת, אחרת אין מי שיתחיל
+  fixedStart Boolean @default(false)
+  /// המשבצת סוגרת את הסבב — חובה להישאר עד הסוף, אחרת אין מי שיסגור
+  fixedEnd   Boolean @default(false)
+  /// משמרת כוננות (SB) — לא תמיד קוראים לה להגיע בפועל, ולכן אותו עובד
+  /// לא משובץ אליה יותר מפעם אחת באותו שבוע. ראה isFeasible.
+  standby    Boolean @default(false)
+
+  /// איך השעות מוצגות בסידור ובמסך העובד: range = "07:15–15:00" |
+  /// start = רק שעת ההגעה | end = רק שעת הסיום. תצוגה בלבד — שתי השעות
+  /// נשמרות תמיד, לחישובי שעות וליומן. ראה formatHours ב-src/lib/week.ts
+  timeDisplay String @default("range")
+
+  @@index([dayOfWeek, sortOrder])
+}
+
+// ---------------------------------------------------------------------------
+// שבוע עבודה
+// ---------------------------------------------------------------------------
+
+model Week {
+  id        String   @id @default(cuid())
+  /// תאריך יום ראשון של השבוע
+  weekStart DateTime @unique
+  opensAt   DateTime
+  /// המועד האחרון להגשה
+  deadline  DateTime
+  /// draft | open | closed | published
+  status    String   @default("draft")
+  /// השעות שאליהן נפתר "עד סגירה", כ-JSON של יום-בשבוע → "HH:MM".
+  /// שישי נסגר מוקדם, ולכן זו מפה ולא שעה יחידה. ראה closingTimeFor ב-src/lib/week.ts
+  closingTimes String @default("{}")
+  publishedAt DateTime?
+  /// מתי השבוע אורכב. null = פעיל.
+  ///
+  /// "מחיקת השבוע" מסמנת כאן ואינה מוחקת שורה: הסידור יורד מכל המסכים
+  /// וממוני סבב שישי, ואפשר להחזיר אותו מ"סידורי עבר". השורה נשארת גם
+  /// כדי שהתאריך יישאר תפוס — `weekStart` הוא `@unique`, והחזרה הייתה
+  /// מתנגשת בשבוע חדש שנפתח באותו תאריך.
+  deletedAt   DateTime?
+  /// דוח ההסבר של ההרצה האחרונה (JSON)
+  lastReport  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  slots          WeekSlot[]
+  availabilities Availability[]
+  assignments    Assignment[]
+  submissions    Submission[]
+  swapOffers     SwapOffer[]
+  trainees       TraineeAssignment[]
+  reminders      ReminderLog[]
+
+  /// כל מסך עובד מחפש את השבוע הפתוח ואת המפורסם לפי סטטוס. בלי אינדקס
+  /// כל חיפוש כזה סורק את הטבלה, שגדלה ב-52 שורות בשנה.
+  @@index([status, weekStart])
+}
+
+/// העתק של משבצת התבנית עבור שבוע ותאריך ספציפיים.
+model WeekSlot {
+  id     String @id @default(cuid())
+  weekId String
+  week   Week   @relation(fields: [weekId], references: [id], onDelete: Cascade)
+
+  date      DateTime
+  dayOfWeek Int
+  role      String
+  period    String
+  startTime String
+  endTime   String
+  label     String?
+  sortOrder Int
+
+  /// ראה TemplateSlot — מועתקים בפתיחת השבוע ומוקפאים איתו
+  fixedStart Boolean @default(false)
+  fixedEnd   Boolean @default(false)
+  standby    Boolean @default(false)
+
+  /// נוסף לשבוע הזה בלבד ("+ מלצר", "+ בלוק", מלצר שמיני בשישי) ולא הגיע
+  /// מהתבנית. רק בלוק כזה אפשר להסיר — בלוק מהתבנית אפשר רק לפנות, כדי
+  /// שאף אחד לא ימחק בטעות משמרת קריטית שאין דרך להחזיר (רואי).
+  extra      Boolean @default(false)
+
+  /// ראה TemplateSlot.timeDisplay — מועתק בפתיחת השבוע, ומשתנה ב"שינוי שעות"
+  timeDisplay String @default("range")
+
+  availabilities Availability[]
+  assignment     Assignment?
+  trainee        TraineeAssignment?
+  swapOffers     SwapOffer[]
+
+  @@index([weekId, dayOfWeek, sortOrder])
+}
+
+// ---------------------------------------------------------------------------
+// הגשות זמינות
+// ---------------------------------------------------------------------------
+
+/// מעקב "מי הגיש": נוצר כשעובד פותח את הטופס, מקבל submittedAt כשהוא מאשר.
+model Submission {
+  id         String   @id @default(cuid())
+  weekId     String
+  week       Week     @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  submittedAt DateTime?
+  /// הערה כללית לשבוע שהמנהל רואה
+  note        String?
+  updatedAt   DateTime @updatedAt
+
+  @@unique([weekId, employeeId])
+}
+
+/// סימון של עובד למשבצת אחת. נשמרות רק משבצות שסומנו available/preferred —
+/// היעדר רשומה משמעו "לא יכול".
+model Availability {
+  id         String   @id @default(cuid())
+  weekId     String
+  week       Week     @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  slotId     String
+  slot       WeekSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+  /// available | preferred
+  state         String
+  /// "HH:MM" — מגיע רק מ-
+  earliestStart String?
+  /// "HH:MM" — חייב לרדת עד
+  latestEnd     String?
+  note          String?
+
+  @@unique([employeeId, slotId])
+  @@index([weekId, employeeId])
+}
+
+// ---------------------------------------------------------------------------
+// שיבוץ
+// ---------------------------------------------------------------------------
+
+model Assignment {
+  id         String   @id @default(cuid())
+  weekId     String
+  week       Week     @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  /// כל משבצת מאוישת בעובד אחד לכל היותר
+  slotId     String   @unique
+  slot       WeekSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// השעות בפועל — עשויות להיות קצרות משעות המשבצת
+  actualStart String
+  actualEnd   String
+
+  /// שיבוץ חלקי בגלל אילוץ שעות של העובד
+  shortened         Boolean @default(false)
+  /// המנהל אישר את המשמרת המקוצרת
+  shortenedApproved Boolean @default(false)
+  /// המנהל אישר שהעובד חורג ממקסימום המשמרות שלו.
+  ///
+  /// החריגה עצמה נגזרת בזמן אמת — ספירת השיבוצים מול `Employee.maxShifts` —
+  /// ולכן אין כאן עמודה שאומרת "זו חריגה", רק את האישור.
+  ///
+  /// buildSchedule מוחק כל שיבוץ שאינו נעוץ ובונה מחדש, ולכן האישור מת עם
+  /// הבנייה. זה מכוון: סידור חדש הוא סידור חדש לבדיקה.
+  overMaxApproved   Boolean @default(false)
+  /// שובץ ידנית ולא ע"י האלגוריתם
+  manualOverride    Boolean @default(false)
+  /// ננעץ — הרצה חוזרת של האלגוריתם לא תזיז אותו
+  pinned            Boolean @default(false)
+  /// הערה של המנהל לעובד בבלוק הזה, לשבוע הזה ("פותח קופה"). מופיעה
+  /// מתחת לשם בסידור, בתמונה ובמסך של העובד. הערה נועצת את השיבוץ, כדי
+  /// שבנייה מחדש לא תמחק אותה.
+  note              String?
+
+  createdAt DateTime @default(now())
+
+  @@index([weekId, employeeId])
+}
+
+/// מתלמד שמצטרף לבלוק של עובד רגיל, בשבוע הזה. המנהל בוחר את הבלוק (רואי).
+///
+/// טבלה נפרדת ולא Assignment, כי מתלמד אינו מאייש את הבלוק: הבלוק נחשב
+/// מלא או ריק לפי העובד הרגיל בלבד, המתלמד לא נספר במכסה ובסבב שישי, ואין
+/// לו מסירת משמרת. הבנייה לא נוגעת בטבלה — מתלמד שובץ ביד ונשאר.
+///
+/// מצביע על המשבצת ולא על העובד הרגיל, כמו SwapOffer: החלפה בין עובדים
+/// משאירה את המתלמד בשעה שאמרו לו להגיע. השעות שלו הן שעות המשבצת.
+model TraineeAssignment {
+  id         String   @id @default(cuid())
+  weekId     String
+  week       Week     @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  /// מתלמד אחד לכל בלוק
+  slotId     String   @unique
+  slot       WeekSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+
+  @@index([weekId, employeeId])
+}
+
+// ---------------------------------------------------------------------------
+// מסירת משמרות
+// ---------------------------------------------------------------------------
+
+/// עובד שקיבל משמרת ולא יכול להגיע מציע אותה למסירה. עובד אחר שכשיר לתפקיד
+/// ופנוי באותו יום תופס אותה — הראשון זוכה, בלי אישור מנהל.
+///
+/// ההצעה מצביעה על המשבצת ולא על השיבוץ: ל-Assignment אין זהות יציבה, כי
+/// buildSchedule מוחק ובונה מחדש כל שיבוץ שאינו נעוץ. המשבצת יציבה כל עוד
+/// השבוע קיים, ולכן היא העוגן.
+model SwapOffer {
+  id     String   @id @default(cuid())
+  weekId String
+  week   Week     @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  slotId String
+  slot   WeekSlot @relation(fields: [slotId], references: [id], onDelete: Cascade)
+
+  /// מי מוסר
+  offeredById String
+  offeredBy   Employee  @relation("SwapOfferedBy", fields: [offeredById], references: [id], onDelete: Cascade)
+  /// מי לקח — null כל עוד ההצעה פתוחה
+  claimedById String?
+  claimedBy   Employee? @relation("SwapClaimedBy", fields: [claimedById], references: [id], onDelete: Cascade)
+
+  /// open | pending | claimed | cancelled
+  ///
+  /// `pending` = מישהו תפס וההחלטה אצל המנהל. המשמרת עדיין רשומה על מי
+  /// שהציע, ובסידור לא משתנה דבר עד האישור — ראה src/lib/swaps.ts.
+  ///
+  /// אין "expired": אין קרון ואין תהליך רקע שיכתוב אותו. הצעה שלא נתפסה עד
+  /// 24 שעות לפני המשמרת פשוט מפסיקה להופיע — הפקיעה נגזרת מהשעון בזמן
+  /// הקריאה (isBeforeCutoff ב-src/lib/swaps.ts) ואינה נשמרת, והמשמרת נשארת
+  /// אצל מי שהציע אותה. בדיוק ההתנהגות הרצויה, בלי שום מנגנון.
+  status String @default("open")
+
+  /// שכפול של slotId כל עוד ההצעה פתוחה, ו-null אחרת. כך יש לכל היותר הצעה
+  /// פתוחה אחת למשבצת: Postgres סופר כל null כערך שונה, ולכן היסטוריית
+  /// ההצעות הסגורות אינה מוגבלת.
+  ///
+  /// אינדקס חלקי (WHERE status='open') היה נקי יותר, אבל אינו ניתן לביטוי
+  /// בסכימה — וכל `migrate diff` עתידי היה מייצר עבורו DROP INDEX בשקט.
+  openSlotId String? @unique
+
+  /// השעות שמי שיתפוס יקבל — תמיד המשבצת המלאה, מוקפאות ברגע ההצעה כדי
+  /// שהמספר שהוצג לתופס והמספר שנכתב לשיבוץ יהיו אותה מחרוזת
+  offeredStart String
+  offeredEnd   String
+
+  /// מי הכריע ומתי. נשמר גם בדחייה, כדי שיהיה תיעוד למה משמרת חזרה ללוח.
+  decidedById String?
+  decidedBy   Employee? @relation("SwapDecidedBy", fields: [decidedById], references: [id], onDelete: SetNull)
+  decidedAt   DateTime?
+
+  createdAt   DateTime  @default(now())
+  claimedAt   DateTime?
+  cancelledAt DateTime?
+
+  @@index([weekId, status])
+  @@index([slotId])
+}
+
+/// מי עובד באיזה שישי, לחודש שלם ומראש.
+///
+/// נבנה לפני שהשבועות בכלל נפתחים, ולכן הוא מצביע על תאריך ולא על משבצת.
+/// בפתיחת שבוע הוא נזרע לשיבוצים נעוצים — ראה seedFridayPlan ב-src/lib/weeks.ts.
+model FridayPlan {
+  id   String   @id @default(cuid())
+  /// חצות בשעון ישראל של אותו שישי
+  date DateTime
+  /// waiter | bartender — לאחמ"שים אין סבב
+  role String
+  /// משבצת "עד סגירה". סגירה בשישי היא סבב בתוך סבב — ראה src/lib/fridays.ts
+  ///
+  /// נגזר מ-`position` כשהוא קיים, ונשמר גם כדי שאפשר יהיה לשאול עליו
+  /// בלי להצליב מול התבנית.
+  isClosing Boolean @default(false)
+
+  /// מקומו של העובד בסדר ההגעה של אותו שישי, החל מ-1.
+  ///
+  /// **זה מפתח ההתאמה למשבצת**: מיקום i נכנס למשבצת ה-i של אותו תפקיד,
+  /// ממוינות ב-sortOrder — כלומר לפי שעת התחלה. זו הקונבנציה שהסידור
+  /// עובד לפיה, ולכן גם משבצות הסגירה נופלות במקומן מעצמן: הן האחרונות
+  /// בתבנית. null = שורה ישנה מלפני העמודה, ראה src/lib/weeks.ts
+  position Int?
+
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// auto = נוצר בסבב | manual = יובא מהגיליון או שהמנהל שינה, והרצה
+  /// חוזרת לא תדרוס אותו
+  source String @default("auto")
+
+  /// מתי השיבוץ פורסם לעובד. null = המנהל עדיין עובד עליו, והעובד
+  /// אינו רואה אותו בשום מסך. ראה publishFridayPlan ב-src/lib/friday-plan.ts
+  publishedAt DateTime?
+
+  createdAt DateTime @default(now())
+
+  offeredIn FridaySwap[] @relation("FridaySwapOffered")
+  claimedIn FridaySwap[] @relation("FridaySwapClaimed")
+
+  /// אותו אדם לא מופיע פעמיים באותו שישי
+  @@unique([date, employeeId])
+  @@index([date, role])
+}
+
+/// שעת הגעה ששונתה לשישי אחד בלבד ("רק בשישי הזה").
+///
+/// השעה הרגילה של כל מיקום מגיעה מהתבנית (ראה fridaySlots ו-arrivalAt).
+/// כאן נשמר רק החריג לתאריך מסוים — גם לפני שהשבוע שלו נפתח, כשאין עדיין
+/// משבצת לשנות. בפתיחת השבוע seedFridayPlan מחיל אותו על המשבצת.
+model FridayTimeOverride {
+  id        String   @id @default(cuid())
+  /// חצות בשעון ישראל של אותו שישי
+  date      DateTime
+  /// waiter | bartender
+  role      String
+  /// המיקום בסדר ההגעה, החל מ-1 — כמו FridayPlan.position
+  position  Int
+  /// "HH:MM"
+  startTime String
+
+  createdAt DateTime @default(now())
+
+  @@unique([date, role, position])
+}
+
+/// ---------------------------------------------------------------------------
+/// חילופים על סבב שישי
+/// ---------------------------------------------------------------------------
+
+/// מסירה או החלפה של שישי, **לפני** שהשבוע נפתח.
+///
+/// למה זה לא SwapOffer: SwapOffer תלוי ב-WeekSlot, ושישי בעוד חודש הוא רק
+/// שורת FridayPlan — אין לו משבצת ואין לו שיבוץ. פרסום חודש מראש בלי דרך
+/// להחליף הוא חצי פיצ'ר, ולכן החילוף חייב לחיות על אותה שכבה כמו הסבב.
+///
+/// מכונת המצבים היא שיקוף מכוון של src/lib/swaps.ts: תפיסה מעבירה ל-pending
+/// ו**אינה מזיזה כלום**, והמנהל מכריע. עד האישור הסבב נשאר כפי שפורסם.
+model FridaySwap {
+  id String @id @default(cuid())
+
+  /// give = מוסר את השישי | trade = מחליף אותו בשישי אחר
+  mode String @default("give")
+
+  /// השישי שמוצע
+  offeredPlanId String
+  offeredPlan   FridayPlan @relation("FridaySwapOffered", fields: [offeredPlanId], references: [id], onDelete: Cascade)
+  offeredById   String
+  offeredBy     Employee   @relation("FridaySwapOfferedBy", fields: [offeredById], references: [id], onDelete: Cascade)
+
+  /// מי לקח — null כל עוד ההצעה פתוחה
+  claimedById String?
+  claimedBy   Employee? @relation("FridaySwapClaimedBy", fields: [claimedById], references: [id], onDelete: Cascade)
+  /// ב-trade בלבד: השישי שהוא נותן בתמורה. ב-give נשאר null.
+  claimedPlanId String?
+  claimedPlan   FridayPlan? @relation("FridaySwapClaimed", fields: [claimedPlanId], references: [id], onDelete: Cascade)
+
+  /// open | pending | done | cancelled
+  status String @default("open")
+
+  /// שכפול של offeredPlanId כל עוד ההצעה פתוחה, ו-null אחרת. כך יש לכל
+  /// היותר הצעה פתוחה אחת לשיבוץ — Postgres סופר כל null כערך שונה, ולכן
+  /// היסטוריית ההצעות הסגורות אינה מוגבלת. אותו דפוס כמו ב-SwapOffer.
+  openPlanId String? @unique
+
+  createdAt DateTime  @default(now())
+  claimedAt DateTime?
+  decidedAt DateTime?
+
+  @@index([status])
+}
+
+// ---------------------------------------------------------------------------
+// הגדרות
+// ---------------------------------------------------------------------------
+
+/// זוגות מפתח-ערך להגדרות שאין להן מקום טבעי אחר.
+///
+/// היום: קישורי קבוצות הוואטסאפ, שדרושים כדי לשלוח הודעה על משבצות חסרות.
+/// אי אפשר לגלות קבוצת וואטסאפ מהקוד — המנהל מדביק את הקישור פעם אחת.
+model Setting {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt
+}
+
+// ---------------------------------------------------------------------------
+// התראות
+// ---------------------------------------------------------------------------
+
+/// התראה לעובד אחד. נשמרת תמיד, גם כשיש דחיפה לנייד — הדחיפה עלולה לא
+/// להגיע (אין הרשמה, אייפון בלי הוספה למסך הבית, הרשאה שנדחתה), וההתראה
+/// בתוך האתר היא הרשת שתופסת את כל השאר.
+model Notification {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// swap-offered | swap-claimed | swap-approved | swap-rejected |
+  /// friday-published | submit-reminder | submit-nudge
+  kind  String
+  title String
+  body  String
+  /// לאן לנווט בלחיצה
+  url   String
+
+  readAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  /// המסך מציג "לא נקראו" ואז את השאר, שניהם לפי זמן יורד
+  @@index([employeeId, readAt, createdAt])
+}
+
+/// "השבוע הרגיל שלי" — הזמינות הקבועה של עובד, ששמר מטופס ההגשה. בשבוע
+/// חדש הוא ממלא ממנה את הטופס בלחיצה ומתקן לפני השליחה.
+///
+/// המשבצות של כל שבוע הן העתק חדש (WeekSlot), ולכן התבנית לא מצביעה על
+/// משבצות אלא שומרת יום, תפקיד ושעות — ומותאמת לשבוע החדש לפי אלה. ראה
+/// src/lib/availability-template.ts.
+model AvailabilityTemplate {
+  employeeId String   @id
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+  /// JSON — ראה AvailabilityTemplateData
+  data       String
+  savedAt    DateTime @default(now())
+}
+
+/// כל תזכורת להגשה שיצאה: לאיזה שבוע, לאיזה עובד, ואיזו.
+///
+/// זה המנגנון שמונע כפילות, ולכן הוא במסד ולא בזיכרון: השעון של Vercel
+/// יכול לרוץ פעמיים, ושני מנהלים יכולים ללחוץ יחד. ב-11/10 הכפתור הידני
+/// נלחץ פעמיים בהפרש של שעה, ו-36 עובדים קיבלו שתי התראות זהות (רואי).
+/// הכלל עצמו ב-reminderBlocked (src/lib/reminders.ts): תזכורת אוטומטית
+/// פעם אחת לשבוע מכל סוג, וידנית — שוב רק אחרי יממה.
+model ReminderLog {
+  id         String   @id @default(cuid())
+  weekId     String
+  week       Week     @relation(fields: [weekId], references: [id], onDelete: Cascade)
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// manual = הכפתור במסך השבוע | day-before = יום לפני המועד |
+  /// last-hours = כמה שעות לפני המועד
+  stage String
+
+  createdAt DateTime @default(now())
+
+  @@index([weekId, stage])
+}
+
+/// הרשמה של דפדפן אחד לדחיפה. לעובד יכולות להיות כמה — טלפון ומחשב.
+model PushSubscription {
+  id         String   @id @default(cuid())
+  employeeId String
+  employee   Employee @relation(fields: [employeeId], references: [id], onDelete: Cascade)
+
+  /// הכתובת שאליה שולחים. ייחודית — אותו דפדפן לא יירשם פעמיים.
+  endpoint String @unique
+  p256dh   String
+  auth     String
+
+  createdAt DateTime @default(now())
+
+  @@index([employeeId])
+}
